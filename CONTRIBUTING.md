@@ -14,13 +14,13 @@ Keep the entrypoint and `lb2/` together when installing. Run the following from
 the repository root with **Lua 5.1** on your PATH:
 
 ```sh
-for suite in run select dummy hud recorder integration resources draw transport stun; do
+for suite in run select dummy hud recorder integration resources draw transport stun recovery; do
   lua "Training/tests/$suite.lua" || exit 1
 done
 find Training -name '*.lua' -exec luac -p {} +
 ```
 
-The current suite has 409 assertions across 10 suites and 26 syntax-checked Lua
+The current suite has 536 assertions across 11 suites and 27 syntax-checked Lua
 files. A pure-test pass does not replace native-emulator or gameplay acceptance.
 
 Document any changed RAM/instruction contracts with their address space, observed

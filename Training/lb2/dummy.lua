@@ -2,6 +2,8 @@
 local D={};D.__index=D
 D.guard_names={"None","Hold stand","Hold crouch","Release stand","Release crouch","Switch stand","Switch crouch","Random guard","Deflect D","Switch -> 4A"}
 D.counter_names={"Off","After hit","After block","Hit / block","After wakeup"}
+D.recovery_names={"Off","Roll forward","Roll backward"}
+D.recovery_frequency_names={"Always","Random (50%)"}
 D.commands={"4A","5A","2A","5B","2B","5C","2C","D","2D","236A","623A","214A","Jump","5AB","5AC","5BC","5BCD","3B","6A","4B"}
 function D.new(random)
  return setmetatable({random=random or math.random,quiet=0},D)
@@ -9,6 +11,7 @@ end
 function D:reset()
  self.previous=nil;self.contact=nil;self.pending=nil;self.sequence=nil;self.switched=nil
  self.random_block=nil;self.random_crouch=nil;self.deflect_at=nil;self.quiet=0;self.counter_done=nil;self.was_down=nil
+ self.recovery=nil
 end
 function D:interaction()
  self.contact=nil;self.switched=nil;self.pending=nil;self.sequence=nil;self.counter_done=nil
@@ -39,10 +42,21 @@ function D:after(frame,options)
  end
  -- Wakeup is deliberately gated by a verified field supplied by the game adapter.
  -- Absence of knockdown classification must never turn ordinary recovery into wakeup.
- if q.knockdown then self.was_down=true end
+ if q.knockdown then
+  if not self.was_down then
+   local mode=options.recovery_mode or 1
+   local enabled=mode~=1 and ((options.recovery_frequency or 1)==1 or self.random(2)==1)
+   self.recovery=enabled and (mode==2 and '6' or '4') or '5'
+  end
+  self.was_down=true
+  -- A pending retaliation cannot run through a knockdown/roll. Wakeup below
+  -- re-arms it at actual grounded control readiness, including after a roll.
+  self.sequence=nil
+ end
  if self.was_down and not q.knockdown and q.ready then
   if options.counter==5 then self.pending={at=frame.engine,kind="wakeup"} end
   self.was_down=nil
+  self.recovery=nil
  end
  if self.sequence then
   local steps=self.sequence.steps
@@ -71,6 +85,13 @@ local function command_sequence(command)
 end
 function D:request(frame,options)
  local p,q=frame.players[1],frame.players[2];local guard=options.guard or 1
+ -- Native down input contexts23/24 admit held directions, not a D pulse.
+ -- Offer direction throughout down; the game's own input/control window gates
+ -- admission, so hard knockdowns stay native. Suppress guard here too: held
+ -- back would otherwise roll even with recovery Off or a Random skip.
+ if q.knockdown or (self.was_down and not q.ready) then
+  return {direction=q.knockdown and q.hp>0 and q.hp<=256 and self.recovery or '5',buttons={}}
+ end
  local d=(guard==3 or guard==5 or guard==7) and "1" or "4"
  if guard==1 then d="5" end
  if guard==8 then

@@ -11,6 +11,7 @@ Reviewed2026-10-20 against the [official 3rd_training_lua README](https://github
 | Recording as a reaction | Recorder API permits an explicit playback trigger. Automatic reaction-to-recording integration is not certified by the recorder module itself. |
 | Round timer | Infinite time defaults On: native clock held at60 with INF label. Toggle Off resumes normal countdown. |
 | P2 HP recovery | Defaults On,60f no-contact wait; configurable30–300f. Waits until the attempt/contact recovery is complete. No KO revival. |
+| Dummy ground recovery | Off / forward / backward; Always or one50% choice per knockdown. Native input admission retains hard-knockdown restrictions. After-wakeup counter waits until grounded control after roll/normal wakeup. Separate from air recovery and HP refill. |
 | Menu accessibility / transitions | Focusable tab header uses A/Left/Right; C/D shortcuts remain. Turbo only for loading transitions, released before selection/combat and on stop/load/timeout. |
 | Reset-position / custom scenario saves | Not implemented; use normal emulator savestates for setups. |
 | Save/load recording files | Not provided by the recorder. Explicit `export_slot`/`import_slot` copy validated in-memory data; no automatic persistence or file picker. |

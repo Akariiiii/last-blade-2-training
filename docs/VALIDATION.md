@@ -1,10 +1,10 @@
 # Validation — 0.1.0-live.4
 
-Checkpoint: 2026-10-20. Source-only package; no emulator or game data included.
+Checkpoint: 2026-10-30 (local ground-recovery development patch; release version unchanged). Source-only package; no emulator or game data included.
 
 ## Pure checks
 
-409 assertions pass in 10 Lua 5.1 suites. All 26 Lua files pass syntax checks.
+536 assertions pass in 11 Lua 5.1 suites. All 27 Lua files pass syntax checks.
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for reproducible commands.
 
 ## Native checks and qualification
@@ -19,16 +19,37 @@ The development workspace retains bounded native FBNeo receipts for:
 - Original-ROM acceptance: 44 checks, 11 cases and 150 paired actor-frame samples
   matching the observation baseline.
 
-These are **composite validation**, not a completed native rerun of every final
-source byte. All current runtime Lua matches those receipts except the final HUD
-stun-number expression and its comments. That expression now displays the native
-stun operand rather than a clamped gauge delta. It is covered by pure renderer
-tests and comparison against the prior native-tested source.
+These are the **historical live.4 composite validation**, not a completed native
+rerun of every current source byte. The baseline release had a later HUD stun
+expression change covered by pure renderer tests. The ground-recovery patch also
+changes dummy/controls; its separate bounded native checks are listed below.
 
 A subsequent final-source native rerun crashed in Wine/FBNeo **before Lua ran**,
 including an empty script. The root cause is unresolved. This prevents claiming
 a complete final-source native pass. Earlier timer/selection and rendering checks
 belong to live.3 and do not constitute a new live.4 acceptance run.
+
+## Ground recovery development checks — 2026-10-30
+
+- Original-ROM production run:14cases, with68checks passing in a separate audit
+  of unchanged native RAM traces. Covers both roll directions and actual
+  displacement, mirrored facing, Off/held guard, both Random outcomes, wakeup
+  normal/motion counter admission and delay after grounded readiness.
+- The original harness verdict remains FAIL: its attack-entry hook omits the low
+  roll scripts. The separate corrected audit reads native RAM script transitions
+  and preserves the original receipt. The command throw tested is recoverable.
+- 0 Training RAM writes in these resource-disabled trials, unchanged runtime source
+  hashes; hidden/windowed/audio0/CPU100 and verified focus protection.
+- An additional four-route diagnostic observed a DM/DP followed by recovery and
+  a normal hit without false wakeup. The intended SDM input admitted a DP instead;
+  it is not SDM acceptance. No completely unrollable hard-knockdown move was
+  identified in this bounded pass. Native input/control gates remain unchanged;
+  recovery cannot override a refusal. Air recovery is outside this feature.
+- The new pure suite covers per-knockdown RNG, roll/counter order, delay,
+  input release, KO, both facings and menu/manual/recording/playback ownership.
+
+These are scoped development checks, not a full release acceptance rerun,
+all-character proof, foreground FPS acceptance or balance-mod validation.
 
 ## Limits
 

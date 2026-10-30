@@ -54,6 +54,10 @@ Menu tabs: **Display · Dummy · Resources · Actions · Recording**.
   counters after hit/block/wakeup. Enable **Switch before counter** for a
   switch-guard counter probe. Counters are bounded input attempts; universal
   first-legal-frame timing is not certified.
+- **Ground recovery:** Dummy → Ground recovery selects Off / Roll forward / Roll
+  backward. Recovery frequency is Always or Random (50% per knockdown). With
+  After wakeup, roll runs first and the counter/delay starts at grounded control
+  readiness. Native recovery restrictions remain in force.
 - **Display:** attack/hurt/pushboxes, owned projectile collisions, distance,
   input history, stun gauges and actual-attempt startup/active/recovery,
   damage/chip/stun/meter and control-ready advantage.

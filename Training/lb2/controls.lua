@@ -5,7 +5,7 @@ local tabs={"Display","Dummy","Resources","Actions","Recording"}
 local function on(v) return v and "On" or "Off" end
 local function row(label,value,key) return {label,value,key,label=label,value=value,key=key} end
 function C.new(api)
- return setmetatable({api=api,menu=false,tab=1,row=0,previous={},guard=1,counter=1,counter_command=1,counter_delay=0,
+ return setmetatable({api=api,menu=false,tab=1,row=0,previous={},guard=1,counter=1,counter_command=1,counter_delay=0,recovery_mode=1,recovery_frequency=1,
   training_mode=true,fast_transitions=true,infinite_time=true,refill_p2=true,heal_delay=60,counter_switch=false,retaliation=false,dummy=D.new(),refill_hp=false,refill_meter=false,quiet=0,reset_requested=false,
   show_boxes=true,box_fill=false,show_hud=true,show_distance=true,show_inputs=true,show_timeline=false,show_stun=true,
   hud_detail=false,hud_alpha=80,hud_x=0,hud_y=0,input_history_rows=6},C)
@@ -17,7 +17,9 @@ function C:items()
   row("P2 control",self.training_mode and "Dummy" or "Manual","training_mode"),
   row("Guard / defense",self:label(),"guard"),row("Counter trigger",D.counter_names[self.counter],"counter"),
   row("Counter command",D.commands[self.counter_command],"counter_command"),row("Counter delay",self.counter_delay.."f","counter_delay"),
-  row("Switch before counter",on(self.counter_switch),"counter_switch")}
+  row("Switch before counter",on(self.counter_switch),"counter_switch"),
+  row("Ground recovery",D.recovery_names[self.recovery_mode],"recovery_mode"),
+  row("Recovery frequency",D.recovery_frequency_names[self.recovery_frequency],"recovery_frequency")}
  elseif self.tab==3 then return {
   row("Infinite time",self.timer_supported==false and "Unavailable"or on(self.infinite_time),"infinite_time"),
   row("P2 HP after combo",on(self.refill_p2),"refill_p2"),
@@ -50,6 +52,8 @@ function C:change(delta)
  elseif key=="counter_command" then self.counter_command=(self.counter_command-1+delta)%#D.commands+1;self:clear_dummy()
  elseif key=="counter_switch" then self.counter_switch=not self.counter_switch;self:clear_dummy()
  elseif key=="counter_delay" then self.counter_delay=U.clamp(self.counter_delay+delta,0,60)
+ elseif key=="recovery_mode" then self.recovery_mode=(self.recovery_mode-1+delta)%#D.recovery_names+1;self:clear_dummy()
+ elseif key=="recovery_frequency" then self.recovery_frequency=(self.recovery_frequency-1+delta)%#D.recovery_frequency_names+1;self:clear_dummy()
  elseif key=="hud_alpha" then self.hud_alpha=U.clamp(self.hud_alpha+delta*16,0,255)
  elseif key=="hud_x" or key=="hud_y" then self[key]=U.clamp(self[key]+delta*2,-48,48)
  elseif key=="input_history_rows" then self[key]=U.clamp(self[key]+delta,1,12)
@@ -109,7 +113,7 @@ function C:before(frame)
   self.playback_active=true;self.last_keys=U.copy(keys);self.api.joypad.set(keys);return
  end
  if self.training_mode then
-  local options={guard=self.guard,counter=self.counter,counter_command=self.counter_command,counter_delay=self.counter_delay,counter_switch=self.counter_switch}
+  local options=self:dummy_options()
   if self.retaliation then options.guard=10 end -- Previous API compatibility.
   D.apply(keys,"P2",self.dummy:request(frame,options),frame.players[2].facing)
  end
@@ -119,10 +123,15 @@ function C:before(frame)
  self.last_keys=U.copy(keys)
  if self.training_mode or active or self.physical_keys['P1 Coin']then self.api.joypad.set(keys)end
 end
+function C:dummy_options()
+ return {guard=self.retaliation and 10 or self.guard,counter=self.counter,counter_command=self.counter_command,
+  counter_delay=self.counter_delay,counter_switch=self.counter_switch,recovery_mode=self.recovery_mode,recovery_frequency=self.recovery_frequency}
+end
 function C:after(frame)
  local p,q=frame.players[1],frame.players[2]
- local options={guard=self.retaliation and 10 or self.guard,counter=self.counter,counter_command=self.counter_command,counter_delay=self.counter_delay,counter_switch=self.counter_switch}
- if self.training_mode then self.dummy:after(frame,options) end
+ if self.training_mode and not self.menu and not self.close_release and not self.playback_active and
+   not (self.transport and self.transport:owns_dummy()) then self.dummy:after(frame,self:dummy_options())
+ else self.dummy:reset() end
  self.release=self.dummy.switched;self.contact=self.dummy.contact;self.quiet=self.dummy.quiet
  -- Resource maintenance occurs only after the observer sampled, after 60 quiet
  -- frames. The app receives an explicit marker so refill cannot be read as damage.

@@ -117,6 +117,18 @@ actions. Manual disables these resource writes as well as dummy input control.
   switch standing↔crouching, random block/no-block, D deflect attempts or
   switch-guard→4A probes. Held-back inputs can walk; use the corner for controlled
   measurements. Random guard chooses a policy per observed interaction.
+- **Ground recovery**: Off (default), Roll forward or Roll backward, relative
+  to P2's current facing. **Recovery frequency**: Always (default) or Random
+  (50% recover / 50% stay down), chosen once per knockdown. This sends only held
+  directions in the native down contexts; the game decides when recovery is
+  legal. Hard knockdowns are never bypassed. Off and Random skips suppress guard
+  directions while down so held-back guard cannot accidentally select a roll.
+  With **Counter trigger → After wakeup**, recovery runs first, then the counter
+  starts when P2 regains grounded control. Counter delay starts at that point,
+  including after a roll; a rejected recovery uses the normal wakeup instead.
+  Roll admission alone does not count as a counter. Menu, Manual P2 and dummy
+  recording/playback suspend this policy. This is ground recovery, separate
+  from HP refill and air recovery.
 - Counter triggers: after hit, block, either, or observed grounded wake-up.
   Choose a normal, button chord or one of the listed motions and0–60f delay.
   Every resolved hit/block contact re-arms the counter, without requiring30
@@ -256,6 +268,7 @@ lua Training/tests/resources.lua
 lua Training/tests/draw.lua
 lua Training/tests/transport.lua
 lua Training/tests/stun.lua
+lua Training/tests/recovery.lua
 ```
 
 These pure tests do not launch FBNeo or require a ROM. Native-emulator checks
