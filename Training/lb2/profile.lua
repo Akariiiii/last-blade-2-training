@@ -1,5 +1,5 @@
 -- Read-only contracts from Analysis/ADDRESS_MAP.md. No ROM assets or tables.
-local P = {name="Last Blade 2", revision="0.1.0-live.4", ram={p1=0x10e344,p2=0x10e348,
+local P = {name="Last Blade 2", revision="0.1.0-live.5", ram={p1=0x10e344,p2=0x10e348,
     phase=0x10853a,native_counter=0x108292,manager=0x10e472},
   names={ [0]="Kaede", "Moriya", "Yuki", "Okina", "Akari", "Juzoh", "Washizuka",
     "Mukuro", "Amano", "Lee", "Zantetsu", "Shigen", "Kagami", "Kojiroh",

@@ -1,7 +1,7 @@
 # Last Blade 2 Live Training
 
 An emulator-side training overlay for **Fightcade FBNeo + Last Blade 2**.
-Version **0.1.0-live.4**, experimental. The saved Frame Lab viewer remains separate.
+Version **0.1.0-live.5**, experimental. The saved Frame Lab viewer remains separate.
 
 The game renders its own sprites. Normal use stores bounded measurements in RAM
 and writes **no recording files, screenshots or per-frame logs**.

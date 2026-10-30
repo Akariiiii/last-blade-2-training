@@ -1,6 +1,6 @@
-# Validation — 0.1.0-live.4
+# Validation — 0.1.0-live.5
 
-Checkpoint: 2026-10-30 (local ground-recovery development patch; release version unchanged). Source-only package; no emulator or game data included.
+Checkpoint: 2026-10-30. Ground-recovery release package. Source-only package; no emulator or game data included.
 
 ## Pure checks
 
@@ -47,6 +47,10 @@ belong to live.3 and do not constitute a new live.4 acceptance run.
   recovery cannot override a refusal. Air recovery is outside this feature.
 - The new pure suite covers per-knockdown RNG, roll/counter order, delay,
   input release, KO, both facings and menu/manual/recording/playback ownership.
+
+The release profile revision changed from live.4 to live.5 after these runs.
+All other runtime Lua bytes match the recovery run snapshot; the revision change
+is checked as an exact metadata-only replacement. No new native run is claimed.
 
 These are scoped development checks, not a full release acceptance rerun,
 all-character proof, foreground FPS acceptance or balance-mod validation.

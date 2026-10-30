@@ -1,7 +1,7 @@
 # Last Blade 2 Training
 
 Live training mode for **The Last Blade 2** in **Fightcade FBNeo**, written in
-Lua 5.1. Current version: **0.1.0-live.4 — experimental**.
+Lua 5.1. Current version: **0.1.0-live.5 — experimental**.
 
 The game draws the sprites while Lua observes collision and timing in the current
 attempt. Normal use creates no video, image, recording or per-frame log files.
