@@ -1,5 +1,6 @@
 local U,D=require("lb2.util"),require("lb2.dummy")
 local Transport=require('lb2.transport')
+local stages=require('lb2.select').stages
 local C={};C.__index=C
 local tabs={"Display","Dummy","Resources","Actions","Recording"}
 local function on(v) return v and "On" or "Off" end
@@ -8,7 +9,8 @@ function C.new(api)
  return setmetatable({api=api,menu=false,tab=1,row=0,previous={},guard=1,counter=1,counter_command=1,counter_delay=0,recovery_mode=1,recovery_frequency=1,
   training_mode=true,fast_transitions=true,infinite_time=true,refill_p2=true,heal_delay=60,counter_switch=false,retaliation=false,dummy=D.new(),refill_hp=false,refill_meter=false,quiet=0,reset_requested=false,
   show_boxes=true,box_fill=false,show_hud=true,show_distance=true,show_inputs=true,show_timeline=false,show_stun=true,
-  hud_detail=false,hud_alpha=80,hud_x=0,hud_y=0,input_history_rows=6},C)
+  hud_detail=false,hud_alpha=80,hud_x=0,hud_y=0,input_history_rows=6,stage_choice=1,
+  show_throw_boxes=true,show_movement=false,lightweight=false},C)
 end
 function C:label() return self.training_mode and D.guard_names[self.guard] or "Manual P2" end
 function C:tabs() return tabs end
@@ -25,7 +27,9 @@ function C:items()
   row("P2 HP after combo",on(self.refill_p2),"refill_p2"),
   row("Recovery wait",string.format("%.1fs / %df",self.heal_delay/60,self.heal_delay),"heal_delay"),
   row("Both HP (idle)",on(self.refill_hp),"refill_hp"),row("Meter refill (idle)",on(self.refill_meter),"refill_meter")}
- elseif self.tab==4 then return {row("Character select","A","return_select"),row("Clear measurements","A","reset_requested"),row("Fast transitions",on(self.fast_transitions),"fast_transitions")}
+ elseif self.tab==4 then return {row("Character select","A","return_select"),row("Clear measurements","A","reset_requested"),
+  row("Fast transitions",on(self.fast_transitions),"fast_transitions"),
+  row("Stage for next match",self.stage_supported and stages[self.stage_choice] or "Unavailable",self.stage_supported and "stage_choice" or "none")}
  elseif self.tab==5 then
   if self.recorder then return self.recorder:items() end
   return {row("Input recording","Not available","none")}
@@ -34,7 +38,9 @@ function C:items()
   row("Stun bars",on(self.show_stun),"show_stun"),row("Distance / range",on(self.show_distance),"show_distance"),
   row("Input history",on(self.show_inputs),"show_inputs"),row("Input rows",self.input_history_rows,"input_history_rows"),
   row("Frame timeline",on(self.show_timeline),"show_timeline"),row("Contact details",on(self.hud_detail),"hud_detail"),
-  row("HUD background",self.hud_alpha,"hud_alpha"),row("HUD offset X",self.hud_x,"hud_x"),row("HUD offset Y",self.hud_y,"hud_y"),row("Filled collision boxes",on(self.box_fill),"box_fill")}
+  row("HUD background",self.hud_alpha,"hud_alpha"),row("HUD offset X",self.hud_x,"hud_x"),row("HUD offset Y",self.hud_y,"hud_y"),row("Filled collision boxes",on(self.box_fill),"box_fill"),
+  row("Throw boxes",on(self.show_throw_boxes),"show_throw_boxes"),row("Jump / wakeup timing",on(self.show_movement),"show_movement"),
+  row("Lightweight HUD",on(self.lightweight),"lightweight")}
 end
 function C:clear_dummy()
  self.dummy:reset();self.release=nil;self.contact=nil;self.retaliation_done=nil
@@ -52,6 +58,7 @@ function C:change(delta)
  elseif key=="counter_command" then self.counter_command=(self.counter_command-1+delta)%#D.commands+1;self:clear_dummy()
  elseif key=="counter_switch" then self.counter_switch=not self.counter_switch;self:clear_dummy()
  elseif key=="counter_delay" then self.counter_delay=U.clamp(self.counter_delay+delta,0,60)
+ elseif key=="stage_choice" then self.stage_choice=(self.stage_choice-1+delta)%#stages+1
  elseif key=="recovery_mode" then self.recovery_mode=(self.recovery_mode-1+delta)%#D.recovery_names+1;self:clear_dummy()
  elseif key=="recovery_frequency" then self.recovery_frequency=(self.recovery_frequency-1+delta)%#D.recovery_frequency_names+1;self:clear_dummy()
  elseif key=="hud_alpha" then self.hud_alpha=U.clamp(self.hud_alpha+delta*16,0,255)

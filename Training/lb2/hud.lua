@@ -1,7 +1,7 @@
 local U,P,I=require("lb2.util"),require("lb2.profile"),require("lb2.input_display")
 local Draw=require('lb2.draw')
 local D={};D.__index=D
-local color={attack=0xff655aff,hurt=0x60db9aff,push=0x62bfffff,unknown=0xf7cd72ff,
+local color={attack=0xff655aff,hurt=0x60db9aff,push=0x62bfffff,unknown=0xf7cd72ff,throw=0xd5a1ffff,
   startup=0xffce6aff,active=0xff655aff,projectile=0xd59bffff,recovery=0x78aaffff,
   ready=0x60db9aff,freeze=0xb8b8b8ff,interrupted=0x815761ff}
 function D.new(gui) return setmetatable({gui=gui,alpha=80},D) end
@@ -67,11 +67,15 @@ function D:attempt(index,p,m,x,y,detail)
   local mode=({[0]="P",[1]="S",[3]="EX"})[p.mode] or "?"
   self:text(x,y,string.format("P%d %s %s",index,short(p.name,15),mode),0xf7cd72ff)
   if not m then self:text(x,y+10,"Perform a move");return end
-  self:text(x,y+10,"Startup: "..start_text(m))
+  self:text(x,y+10,"Startup: "..(m.throw_checks and U.frames(m.throw_startup) or start_text(m)))
   -- Hit frame is an inclusive emulated-frame offset, not a source-tick startup.
   local hit=m.contact and tostring(m.contact-m.start+1).."e" or "--"
   self:text(x,y+20,"Hit frame: "..hit.."  "..short(m.outcome,6))
-  if m.grab_frame then
+  if m.throw_whiff then
+    self:text(x,y+30,"Whiff: "..U.frames(m.throw_whiff).." Rec: "..U.frames(m.throw_recovery),0xd5b8ffff)
+  elseif m.throw_checks then
+    self:text(x,y+30,string.format("%s throw / %d check(s)",m.throw_kind,m.throw_checks),0xd5b8ffff)
+  elseif m.grab_frame then
     self:text(x,y+30,string.format("Grab gate: +%de",m.grab_frame-m.start),0xd5b8ffff)
   else
     local active=m.first_active and tostring(m.body_active).."b"..(m.projectile_active>0 and "/"..m.projectile_active.."o" or "") or "--"
@@ -99,11 +103,23 @@ function D:draw(frame,observe,control,game,width,height,stats)
   self.alpha=U.clamp(control.hud_alpha or 80,0,255)
   if control.menu then self:menu(control,width);return end
   local gui=self.gui
-  if control.show_boxes then
-    Draw.boxes(gui,frame.boxes,width,height,color,control.box_fill)
+  local light=control.lightweight
+  if not light and (control.show_boxes or control.show_throw_boxes) then
+    Draw.boxes(gui,frame.boxes,width,height,color,control.box_fill,not not control.show_boxes,not not control.show_throw_boxes)
+    if control.show_boxes and frame.hurtboxes_sampled~=false then
+      for _,a in ipairs(frame.players)do
+        if a.state and a.state>=0x17 and a.state<=0x1c then
+          local hurt=false
+          for _,b in ipairs(frame.boxes)do if b.actor==a.address and b.kind=='hurt' then hurt=true;break end end
+          if not hurt then
+            self:text(U.clamp(a.sx-31,0,width-66),U.clamp(a.sy-16,45,height-28),"No hurtbox seen",0x60db9aff)
+          end
+        end
+      end
+    end
   end
   local p,q=frame.players[1],frame.players[2]
-  if control.show_distance then
+  if not light and control.show_distance then
     local y=U.clamp(math.max(p.gy,q.gy)-4,80,height-28)
     gui.line(p.gx,y,q.gx,y,0xf7cd72dd);gui.line(p.gx,y-3,p.gx,y+3,0xf7cd72ff);gui.line(q.gx,y-3,q.gx,y+3,0xf7cd72ff)
     self:text(U.clamp((p.gx+q.gx)/2-12,0,width-25),y-10,string.format("%du",math.abs(p.x-q.x)),0xf7cd72ff)
@@ -111,23 +127,33 @@ function D:draw(frame,observe,control,game,width,height,stats)
     if range then
       local sign=q.x>=p.x and 1 or -1
       local endpoint=p.gx+sign*range.limit*p.transform.sx/256
-      for x=math.min(p.gx,endpoint),math.max(p.gx,endpoint),6 do
-        gui.line(U.clamp(x,0,width-1),y-2,U.clamp(x+2,0,width-1),y-2,0xba97ffcc)
-      end
+      gui.line(U.clamp(p.gx,0,width-1),y-2,U.clamp(endpoint,0,width-1),y-2,0xba97ffcc)
       self:text(6,height-25,string.format("Grab ref %du | %s*",range.limit,range.within and "distance OK" or "out"),0xd5b8ffff)
     end
   end
   if control.training_mode and control.infinite_time and control.timer_supported then self:text(math.floor(width/2)-6,30,"INF",0xffce6aff)end
-  if control.show_stun~=false then for i,a in ipairs(frame.players) do self:stun_bar(a,i,width) end end
+  if not light and control.show_stun~=false then for i,a in ipairs(frame.players) do self:stun_bar(a,i,width) end end
   local dx,dy=control.hud_x or 0,control.hud_y or 0
+  local hud_y=U.clamp(46+dy,40,height-120)
   if control.show_hud then
     for i,a in ipairs(frame.players) do
       local x=U.clamp((i==1 and 6 or math.floor(width/2)+4)+dx,0,width-142)
-      local y=U.clamp(46+dy,40,height-120)
-      self:attempt(i,a,observe.current[i] or observe.last[i],x,y,control.hud_detail)
+      local y=hud_y
+      local m=observe.current[i] or observe.last[i]
+      if light then
+        local recovery=m and (m.throw_recovery or m.recovery)
+        local startup=m and (m.throw_checks and U.frames(m.throw_startup) or start_text(m)) or "--"
+        self:text(x,y,string.format("P%d SU %s Rec %s",i,startup,U.frames(recovery)),0xf7cd72ff)
+        self:text(x,y+10,string.format("Adv %s Dmg %d",U.signed(m and m.advantage),m and m.damage or 0))
+      else self:attempt(i,a,m,x,y,control.hud_detail) end
+      local data=control.show_movement and observe.movement and observe.movement[i]
+      if data then
+        self:text(x,y+(light and 20 or control.hud_detail and 100 or 80),
+          string.format("Jump %s  %s %s",U.frames(data.jump),data.wakeup_kind or "Wakeup",U.frames(data.wakeup)),0xc5d0dbff)
+      end
     end
   end
-  if control.show_timeline then
+  if not light and control.show_timeline then
     local top=height-45
     for i=1,2 do
       local m=observe.current[i] or observe.last[i]
@@ -138,11 +164,15 @@ function D:draw(frame,observe,control,game,width,height,stats)
       end
     end
   end
-  if control.show_inputs then
+  if not light and control.show_inputs then
     local rows=control.input_history_rows or 6
+    local y=U.clamp((control.hud_detail and 148 or 130)+dy,110,height-29-rows*9)
+    if control.show_hud and control.show_movement then
+      y=math.max(y,hud_y+(control.hud_detail and 112 or 92))
+      rows=math.min(rows,math.max(0,math.floor((height-22-y)/9)))
+    end
     for i=1,2 do
       local x=U.clamp((i==1 and 4 or width-60)+dx,0,width-58)
-      local y=U.clamp((control.hud_detail and 148 or 130)+dy,110,height-29-rows*9)
       I.draw(gui,observe.history[i],x,y,rows,self.alpha)
     end
   end

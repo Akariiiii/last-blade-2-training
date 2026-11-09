@@ -20,7 +20,7 @@ done
 find Training -name '*.lua' -exec luac -p {} +
 ```
 
-The current suite has 536 assertions across 11 suites and 27 syntax-checked Lua
+The current suite has 568 assertions across 11 suites and 27 syntax-checked Lua
 files. A pure-test pass does not replace native-emulator or gameplay acceptance.
 
 Document any changed RAM/instruction contracts with their address space, observed

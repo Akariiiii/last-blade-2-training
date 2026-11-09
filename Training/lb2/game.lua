@@ -89,32 +89,35 @@ function G:objects(p,q,width)
   end
   return out
 end
-function G:boxes(p,object)
-  local m=self.m;local out={}
+function G:boxes(p,object,out,display)
+  local m=self.m;out=out or {}
   for i=0,7 do
     local slot=p.address+0x100+10*i;local profile=m.readbyte(slot)
     if profile~=0 and (not object or m.readbyte(slot+1)~=0) then
-      local flags=self:flags(p.character,profile);local shape=m.readbyte(slot+2)
+      local flags=self:flags(p.character,profile)
       local kind=flags and (U.bit(flags,1) and "hurt" or "attack") or "unknown"
-      local x1,x2,y1,y2
-      if shape<8 then
-        local scale=2^shape
-        x1=U.s8(m.readbyte(slot+3))*scale;x2=U.s8(m.readbyte(slot+4))*scale
-        if p.facing~=0 then x1,x2=-x2,-x1 end
-        x1,x2=U.s16(p.x+x1),U.s16(p.x+x2)
-        y1=U.s16(U.s8(m.readbyte(slot+5))*scale-p.height)
-        y2=U.s16(U.s8(m.readbyte(slot+6))*scale-p.height)
-      elseif shape%8==0 then
-        x1=U.s16(m.readword(0x10e56c));x2=U.s16(m.readword(0x10e56e));y1,y2=-1,0
-      end
-      if x1 and x1~=x2 and y1~=y2 then
-        local ax,ay=G.point(x1,y1,p.transform);local bx,by=G.point(x2,y2,p.transform)
-        out[#out+1]={left=math.min(ax,bx),right=math.max(ax,bx),top=math.min(ay,by),bottom=math.max(ay,by),
-          kind=kind,actor=p.address,owner=p.owner or p.address,profile=profile,slot=slot,native=false}
+      if display~=false or kind=="attack" then
+        local shape=m.readbyte(slot+2)
+        local x1,x2,y1,y2
+        if shape<8 then
+          local scale=2^shape
+          x1=U.s8(m.readbyte(slot+3))*scale;x2=U.s8(m.readbyte(slot+4))*scale
+          if p.facing~=0 then x1,x2=-x2,-x1 end
+          x1,x2=U.s16(p.x+x1),U.s16(p.x+x2)
+          y1=U.s16(U.s8(m.readbyte(slot+5))*scale-p.height)
+          y2=U.s16(U.s8(m.readbyte(slot+6))*scale-p.height)
+        elseif shape%8==0 then
+          x1=U.s16(m.readword(0x10e56c));x2=U.s16(m.readword(0x10e56e));y1,y2=-1,0
+        end
+        if x1 and x1~=x2 and y1~=y2 then
+          local ax,ay=G.point(x1,y1,p.transform);local bx,by=G.point(x2,y2,p.transform)
+          out[#out+1]={left=math.min(ax,bx),right=math.max(ax,bx),top=math.min(ay,by),bottom=math.max(ay,by),
+            kind=kind,actor=p.address,owner=p.owner or p.address,profile=profile,slot=slot,native=false}
+        end
       end
     end
   end
-  if not object and m.readbyte(p.address+0xf2)~=0 then
+  if display~=false and not object and m.readbyte(p.address+0xf2)~=0 then
     local scale=2^(m.readword(p.address+0xf4)%8)
     local x1=U.s16(m.readword(p.address+0xf6))*scale;local x2=U.s16(m.readword(p.address+0xf8))*scale
     if p.facing~=0 then x1,x2=-x2,-x1 end
@@ -125,24 +128,53 @@ function G:boxes(p,object)
   end
   return out
 end
-function G:sample(width)
+function G:sample(width,players_only,display)
   local m=self.m;local p=m.readdword(P.ram.p1);local q=m.readdword(P.ram.p2)
   if m.readbyte(P.ram.phase)~=0 or p==q then return nil end
   local a,b=self:actor(p,width),self:actor(q,width)
   if not a or not b then return nil end
-  local frame={engine=self.emu.framecount(),native_counter=m.readword(P.ram.native_counter),players={a,b},boxes={},objects=self:objects(p,q,width)}
-  for _,obj in ipairs({a,b}) do for _,box in ipairs(self:boxes(obj,false)) do frame.boxes[#frame.boxes+1]=box end end
-  for _,obj in ipairs(frame.objects) do for _,box in ipairs(self:boxes(obj,true)) do frame.boxes[#frame.boxes+1]=box end end
+  local frame={engine=self.emu.framecount(),native_counter=m.readword(P.ram.native_counter),players={a,b},boxes={},
+    hurtboxes_sampled=not players_only and display~=false}
+  if players_only then return frame end
+  frame.objects=self:objects(p,q,width)
+  self:boxes(a,false,frame.boxes,display)
+  self:boxes(b,false,frame.boxes,display)
+  for _,obj in ipairs(frame.objects) do self:boxes(obj,true,frame.boxes,display) end
   return frame
 end
 function G:range(source,target,command)
-  local limits=command and P.grabs[source.character] or {P.normal_throw,P.normal_throw}
+  local limits
+  if command then limits=P.grabs[source.character]
+  else
+    local base=self.m.readword(0x76ae4+2*source.character)
+    limits={base,base}
+  end
   if not limits then return nil end
   local base=limits[source.mode==0 and 1 or 2]
-  local allowance=self.m.readword(0x304a6+(target.character%32)*2)
-  for _,pose in ipairs(P.pose_allowance[target.character] or {}) do if pose==target.pose then allowance=allowance+16;break end end
+  local allowance=self:throw_allowance(target.character,target.state)
   local distance=math.abs(source.x-target.x)
   return {base=base,allowance=allowance,limit=base+allowance,distance=distance,
     adjusted=math.max(0,distance-allowance),within=math.max(0,distance-allowance)<=base}
+end
+function G:throw_allowance(character,state)
+  local allowance=self.m.readword(0x304a6+(character%32)*2)
+  if state==0x23 or state==0x24 then return allowance+16 end
+  for _,value in ipairs(P.pose_allowance[character] or {}) do
+    if value==state then return allowance+16 end
+  end
+  return allowance
+end
+function G:throw_box(source,kind,width,left,top,right,bottom)
+  local m=self.m
+  local x=U.s16(m.readword(source+0x80))
+  local y=U.s16(m.readword(source+0x84))
+  if kind=='air' then
+    y=y-U.s16(m.readword(source+0x88))
+    if m.readbyte(source+0x41)~=0 then left,right=-right,-left end
+  end
+  local t=self:transform(source,width)
+  local x1,y1=G.point(x+left,y+top,t)
+  local x2,y2=G.point(x+right,y+bottom,t)
+  return {kind='throw',left=math.min(x1,x2),right=math.max(x1,x2),top=math.min(y1,y2),bottom=math.max(y1,y2)}
 end
 return G

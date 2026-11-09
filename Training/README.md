@@ -1,7 +1,7 @@
 # Last Blade 2 Live Training
 
 An emulator-side training overlay for **Fightcade FBNeo + Last Blade 2**.
-Version **0.1.0-live.5**, experimental. The saved Frame Lab viewer remains separate.
+Version **0.1.0-live.6**, experimental. The saved Frame Lab viewer remains separate.
 
 The game renders its own sprites. Normal use stores bounded measurements in RAM
 and writes **no recording files, screenshots or per-frame logs**.
@@ -63,8 +63,18 @@ navigation does not itself pause the game. Backward stepping is deferred; in-mem
   game clears during contact handling.
 - Origin-to-origin distance in game units. The purple ground-grab reference uses
   reviewed character/mode limits and target allowances. It extends toward the
-  current target; it is **not** a centered total-width box. Passing distance alone
-  does not prove throw eligibility, facing admission or immunity status.
+  current target.
+- **Throw boxes** shows purple geometry on the native check frame, including
+  rejected normal throws, air throws and command grabs that use the shared
+  ground or air predicate. Ground checks draw a floor-level band for horizontal
+  spacing. Air checks draw the rectangle tested against the target origin.
+  Use Frame Advance to inspect the check. Spacing and target eligibility are
+  separate parts of the native predicate.
+- **Jump / wakeup timing** adds the last observed jump startup and get-up or
+  roll duration. Jump startup runs from the first observed startup state to
+  takeoff. Wakeup and roll run from the first observed get-up or roll state
+  to grounded control. With collision boxes enabled, a roll with no drawable
+  native hurtbox shows **No hurtbox seen**.
 - Stun-depletion bars below each native HP bar, with used/capacity values.
   Actual HP, meter and stun remaining/capacity. The move statistic uses the
   selected native stun operand; gauge depletion can differ when the game primes
@@ -101,9 +111,19 @@ frame**, after the last observed contact. A negative value favors the defender.
 This is an observed control boundary, **not a universal proof that block, deflect,
 every cancel or a particular retaliation becomes legal on that same frame**.
 Interrupted, superseded or incomplete attempts do not receive ordinary advantage.
-Knockdown results include the observed return to ground control; they are not
-universal wake-up/techability data. Grabs are detected at the native successful
-gate; delayed throw damage does not define their startup or a conventional active box.
+Knockdown results include the observed return to ground control.
+For a measured throw, Startup runs from the native initializer to the first
+grab check. On whiff, the HUD shows total elapsed frames to grounded control
+and recovery from the last check. The timeline marks the check separately from
+strike activity. An input that never reaches a grab check has no measured throw
+window. Aerial whiff totals include time until grounded control.
+
+## Stage selection
+
+Open **Actions → Stage for next match**, choose a stage, and use
+**Character select** or **Alt+1** to apply it. **Auto** uses the game's regular
+stage selection. The chosen stage is applied before the native match intro.
+The option is available when the stage selection instruction signature matches.
 
 ## Dummy and resources
 
@@ -213,13 +233,16 @@ post-dizzy timer residue does not keep the HUD marked dizzy.
 
 Collision boxes default to outlines. Display → Filled collision boxes restores
 translucent interiors. Timeline phases are drawn as contiguous strips with the
-same per-frame contacts. Identical box geometry/color is rendered once; native
-collision observations remain separate and complete. Measurements still run
-every emulated frame, including when the timeline is hidden.
+same per-frame contacts. Large outlines use lines to avoid FBNeo's transparent
+interior scan. Paused redraws reuse the previous snapshot, and native
+observation hooks stay registered across character and stage changes.
 
-These changes reduce drawing work. Hidden-window tests cannot certify foreground
-FPS on every Wine/video configuration; a successful test is not a claim that all
-stage, combo or rendering slowdowns are fixed.
+**Display → Lightweight HUD** draws a compact timing and damage readout.
+Measurements, input history, dummy and recorder still update every emulated
+frame. The option hides Training's collision and throw boxes, range guides,
+stun bars, timeline and input display. The emulator still draws the stage.
+Performance measurements in a hidden window cover Lua drawing and sampling.
+Foreground FPS depends on the host and video backend.
 
 ## Compatibility and scope
 

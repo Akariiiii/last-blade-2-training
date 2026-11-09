@@ -117,6 +117,25 @@ regs['m68000.d1']=0x48;dword[0x10fff0]=0x323e6;byte[pp+0x152]=5;word[pp+0x150]=0
 registered[Profile.hooks.entry]();equal(#h:take(12).entries,0,"switch guard is a response")
 regs['m68000.d1']=0x30;registered[Profile.hooks.entry]()
 equal(#h:take(12).entries,1,"4A admitted from switched control remains an attack")
+local original_hook=registered[Profile.hooks.entry]
+h:install(function()return 320 end)
+equal(registered[Profile.hooks.entry],original_hook,"hook installation is idempotent")
+h:set_enabled(false);original_hook()
+equal(#h:take(12).entries,0,"selection suspends observation")
+h:set_enabled(true)
+dword[pp+0x174]=qq;dword[0x10fff0]=0x030694;regs['m68000.d0']=40;regs['m68000.d2']=0
+word[pp+0x74]=0x3d;word[pp+0x80]=100;word[pp+0x84]=100
+registered[Profile.hooks.throw_ground]();registered[Profile.hooks.grab]()
+local checked=h:take(12)
+equal(#checked.throws,1);equal(checked.throws[1].kind,'normal');equal(checked.throws[1].accepted,false)
+equal(checked.throws[1].box.left,60);equal(checked.throws[1].box.right,140)
+equal(#checked.grabs,0,"rejected native gate does not create a contact")
+regs['m68000.a5']=0x108000;word[pp+0x88]=30;byte[pp+0x41]=1
+word[0x10e3d2]=65536-68;word[0x10e3d4]=65536-108;word[0x10e3d6]=20
+registered[Profile.hooks.throw_air]()
+checked=h:take(12)
+equal(checked.throws[1].kind,'air');equal(checked.throws[1].box.left,80);equal(checked.throws[1].box.right,168)
+equal(checked.throws[1].box.top,-54)
 h:stop();equal(next(registered),nil,"owned hooks cleaned up")
 -- Readonly geometry respects mirror, signed offsets, scale and native crop.
 word[0x70272]=1
@@ -132,9 +151,30 @@ local bad_api={memory={readword=function()return 0 end,registerexec=function()ho
  gui={register=function(f)gui_callback=f end},joypad={get=function()return{}end,set=function()error('input injected')end}}
 local app=App.new(bad_api);app:start();equal(app.compatible,false);equal(hook_count,0);equal(type(gui_callback),'function')
 app:stop();app:step();equal(app.frame,nil,"stopped callbacks do not sample/write")
+local paused=App.new({memory={},emu={framecount=function()return 42 end},gui={}})
+paused.engine=42
+paused.game.sample=function()error("paused repaint rebuilt gameplay snapshot")end
+paused:step()
+equal(paused.engine,42,"paused redraw reuses the sampled frame")
 -- Native grab gate and subsequent damage are one grab outcome, not mixed.
 o=Observe.new();o:update(frame(0),events());start(o)
 f=frame(2);busy(f.players[1]);busy(f.players[2]);local e=events();e.grabs={{source=f.players[1].address,target=f.players[2].address}};o:update(f,e)
 f=frame(3);busy(f.players[1]);busy(f.players[2]);f.players[2].hp=237;o:update(f,events())
 f=frame(4);f.players[2].hp=237;o:update(f,events());equal(o.last[1].outcome,'grab');equal(o.last[1].damage,19)
+-- Rejected native throw measures gate and recovery even without a strike box.
+o=Observe.new();o:update(frame(0),events());start(o)
+f=frame(2);busy(f.players[1]);e=events()
+e.throws={{source=f.players[1].address,target=f.players[2].address,kind='command',accepted=false}}
+o:update(f,e);o:update(frame(3),events())
+equal(o.last[1].throw_startup,1);equal(o.last[1].throw_checks,1)
+equal(o.last[1].throw_whiff,2);equal(o.last[1].throw_recovery,1)
+equal(o.last[1].first_active,nil);equal(o.last[1].advantage,nil)
+-- Measure a jump from observed startup and a roll from observed rise to ready.
+o=Observe.new();o:update(frame(0),events())
+f=frame(1);busy(f.players[1]);f.players[1].state=0x0c
+busy(f.players[2]);f.players[2].knockdown=true;o:update(f,events())
+f=frame(2);busy(f.players[1]);f.players[1].state=0x09;f.players[1].height=1
+busy(f.players[2]);f.players[2].state=0x17;o:update(f,events())
+o:update(frame(3),events())
+equal(o.movement[1].jump,1);equal(o.movement[2].wakeup,1);equal(o.movement[2].wakeup_kind,'Roll')
 print(string.format("PASS: %d assertions",tests))

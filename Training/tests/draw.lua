@@ -11,6 +11,11 @@ local gui={line=function()count=count+1 end,box=function(x1,y1,x2,y2,fill)count=
 eq(D.boxes(gui,boxes,320,224,colors,false),3,'draw distinct color/geometry once');eq(count,3);eq(filled,0,'transparent interiors')
 eq(#boxes,5,'measurement retained');eq(boxes[1].actor,1);eq(boxes[2].actor,2)
 eq(D.boxes(gui,boxes,320,224,colors,true),3);eq(filled,3)
+local large={{left=1,right=100,top=2,bottom=60,kind='hurt'}}
+local borders=0
+local outline={box=function()error('large transparent interior would be scanned')end,line=function()borders=borders+1 end}
+eq(D.boxes(outline,large,320,224,colors,false),1)
+eq(borders,4,'large outline draws its perimeter only')
 -- Pixel-equivalence of run-compressed timeline including cropped tails/contacts.
 local function raster()
  local pixels={};local calls=0;local api={}

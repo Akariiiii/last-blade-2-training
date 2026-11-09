@@ -2,6 +2,10 @@
 -- Validated against original disassembly 0286A/0293C,1A03A,1B05C and flow-probe03.
 local U=require('lb2.util')
 local S={};S.__index=S
+S.stages={"Auto","Shimiji Pass","Cloudy Sky","Porttown","Twilight Village","Graveyard","Forest","Yuki-Machi","Shrine","Boss Stage","Wadamoya Fire"}
+-- Native stage choice has been written here, before the intro and scene setup.
+local stage_hook=0x004116
+local stage_signature={0x4a6d,0x02c6,0x6700,0x00de,0x0c2d,0x0002,0x053a}
 local names={returning='Returning to character select',char1='P1: choose character',char2='P2: choose character',
   mode1='P1: choose Power / Speed / EX',mode2='P2: choose Power / Speed / EX',intro='Starting training match'}
 local contracts={
@@ -22,7 +26,7 @@ function S:set_fast(enabled)
  if ok then self.fast_active=enabled else self.speed_error=tostring(message)end
 end
 function S:cancel()
- self:set_fast(false);self.active=false;self.finished=false
+ self:set_fast(false);self.active=false;self.finished=false;self.requested_stage=nil
 end
 function S:compatible()
  for _,row in ipairs(contracts) do for i,w in ipairs(row[2])do
@@ -30,15 +34,17 @@ function S:compatible()
  end end
  return true
 end
-function S:request()
+function S:request(stage_choice)
  self:set_fast(false)
  local ok,message=self:compatible();if not ok then self.error=message;return false,message end
  self.active=true;self.stage='returning';self.ticks=0;self.wait_release=true;self.stable=0
  self.jumped=false;self.error=nil;self.release_after=false
+ self.requested_stage=self.stage_supported and stage_choice and stage_choice>1 and S.stages[stage_choice] and stage_choice-2 or nil
  self.finished=false;self:set_fast(true)
  return true
 end
 function S:install()
+ if self.installed then return end
  local ok=self:compatible();if not ok then return end
  self.api.memory.registerexec(0x1b05c,function()
   if not self.active then return end
@@ -49,8 +55,26 @@ function S:install()
   end
  end)
  self.installed=true
+ local m=self.api.memory
+ self.stage_supported=true
+ for i,w in ipairs(stage_signature)do
+  if m.readword(stage_hook+(i-1)*2)~=w then self.stage_supported=false;break end
+ end
+ if self.stage_supported then
+  m.registerexec(stage_hook,function()
+   if self.active and self.requested_stage and (self.stage=='mode2' or self.stage=='intro') then
+    m.writeword(0x10e57c,self.requested_stage)
+    self.requested_stage=nil
+   end
+  end)
+ end
 end
-function S:stop()self:cancel();if self.installed then self.api.memory.registerexec(0x1b05c,nil)end;self.installed=false end
+function S:stop()
+ self:cancel()
+ if self.installed then self.api.memory.registerexec(0x1b05c,nil) end
+ if self.stage_supported then self.api.memory.registerexec(stage_hook,nil) end
+ self.installed=false;self.stage_supported=false
+end
 function S:transition(stage)
  if self.stage~=stage then self.stage=stage;self.wait_release=true;self.stable=0;self:set_fast(stage=='returning'or stage=='intro')end
 end

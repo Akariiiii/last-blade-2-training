@@ -1,8 +1,33 @@
-# Validation — 0.1.0-live.5
+# Validation — 0.1.0-live.6
 
-Checkpoint: 2026-10-30. Ground-recovery release package. Source-only package; no emulator or game data included.
+Release checkpoint on 2026-11-09. The package contains Lua, tests, and documentation.
 
-## Pure checks
+## Live.6 performance and display
+
+The performance and display follow-up passes 568 assertions across 11 Lua 5.1
+suites and 27 syntax checks. Original-ROM regression coverage includes 44
+checks across 11 cases and 150 byte-identical actor RAM frames with and without
+Training. The hidden Yuki and Lee combo profiles also preserve gameplay RAM.
+The 44-check run and Lee profile precede the final HUD layout adjustment.
+The scoped original-ROM audit passed 24 checks. The release changes only the
+profile revision string after that audit. The other runtime bytes match the
+audit snapshot.
+
+The native feedback trials cover both ground throw types on hit and whiff, an
+air throw whiff, both Lee roll directions, and four stage selections. Lee's
+hurtboxes return when the roll state ends. The sampled frames during the rolls
+have no native hurtbox to display.
+
+The lightweight HUD makes about 89% fewer draw calls on the repeated test
+sequence. Hook registration stays constant across four character/stage
+selections in one session. Hidden testing did not reproduce the reported
+cumulative slowdown. Foreground FPS and longer sessions on the reporter's
+configuration remain unverified. The lightweight option reduces overlay
+drawing while FBNeo continues to render the stage.
+
+## Historical live.5 checks
+
+### Pure checks
 
 536 assertions pass in 11 Lua 5.1 suites. All 27 Lua files pass syntax checks.
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for reproducible commands.

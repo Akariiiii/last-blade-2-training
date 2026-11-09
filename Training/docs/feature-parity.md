@@ -16,7 +16,10 @@ Reviewed2026-10-20 against the [official 3rd_training_lua README](https://github
 | Reset-position / custom scenario saves | Not implemented; use normal emulator savestates for setups. |
 | Save/load recording files | Not provided by the recorder. Explicit `export_slot`/`import_slot` copy validated in-memory data; no automatic persistence or file picker. |
 | First-frame counterattack | Dummy action attempts are separate from native admission proof. There is no claim of an exact legal first frame for every move, recovery, block, deflect or wake-up. |
-| Collision and input display | Native attack/hurt/push observations and both input histories exist. Grab range is a native predicate reference, not a universal strike-style throw rectangle. |
+| Collision and input display | Native attack/hurt/push observations and both input histories. The shared throw predicates expose ground spacing bands and air origin bounds on the actual check frame. |
+| Whiff and movement timing | Observed throw checks, whiff total and recovery. Optional jump startup and get-up/roll timing show the observed boundaries for the current attempt. |
+| Stage selection | Actions selects the next native match stage when the stage selection signature matches. Auto uses the game's default choice. |
+| Low overhead display | Lightweight HUD reduces drawing while keeping full-rate attack measurement, dummy control and recording. |
 | Parry/red-parry drills | 3rd Strike mechanics do not directly map to Last Blade2 deflect. No claim of the reference drill's full equivalent. |
 | Gauges, damage and advantage | Native HP/meter/stun and observed damage/timing are available. Control-ready advantage is conditional; it does not certify every defensive action at that frame. |
 | Character selection/hidden characters | Lua load / Alt+1 returns to native selection. P1 controls P1 character, P2 character, P1 mode, P2 mode, with release barriers. Native hidden/EX input paths remain; every hidden recipe is not certified. |

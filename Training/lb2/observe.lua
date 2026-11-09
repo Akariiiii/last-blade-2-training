@@ -1,8 +1,8 @@
 -- Pure bounded state machine. No emulator API, memory writes, disk I/O or predictions.
 local U=require("lb2.util")
 local O={};O.__index=O
-function O.new() return setmetatable({current={},last={},history={{},{}},previous=nil,limit=600},O) end
-function O:reset() self.current={};self.last={};self.history={{},{}};self.previous=nil end
+function O.new() return setmetatable({current={},last={},history={{},{}},movement={{},{}},previous=nil,limit=600},O) end
+function O:reset() self.current={};self.last={};self.history={{},{}};self.movement={{},{}};self.previous=nil end
 local function active(frame,actor,owner)
   for _,b in ipairs(frame.boxes) do
     if b.kind=="attack" and (owner and b.owner==actor or not owner and b.actor==actor) then return true end
@@ -33,8 +33,37 @@ function O:finish(index,status)
       if a.contact and a.contact<a.first_active then a.startup_bound=a.contact-a.start
       else a.startup=a.first_active_tick end
     elseif a.contact then a.startup_bound=a.contact-a.start end
+    if a.throw_checks and not a.contact and not a.interrupted and a.attacker_ready then
+      a.throw_whiff=a.attacker_ready-a.start
+      a.throw_recovery=a.ready_source_ticks-a.last_throw_tick
+    end
   end
   self.last[index]=a;self.current[index]=nil
+end
+local function movement(data,p,prev,engine)
+  if not prev then return end
+  local jumping=p.state>=0x09 and p.state<=0x10
+  if jumping and prev.ready and prev.height==0 and (not prev.state or prev.state<0x09 or prev.state>0x10) then
+    data.jump_start=engine
+  end
+  if data.jump_start then
+    if p.height>0 then
+      data.jump=engine-data.jump_start
+      data.jump_start=nil
+    elseif not jumping then data.jump_start=nil end
+  end
+  if p.knockdown then data.was_down=true end
+  if data.was_down and p.height==0 and p.state>=0x15 and p.state<=0x1c and not data.rise_start then
+    data.rise_start=engine
+    data.rise_kind=p.state>=0x17 and 'Roll' or 'Wakeup'
+  end
+  if data.was_down and p.ready then
+    if data.rise_start then
+      data.wakeup=engine-data.rise_start
+      data.wakeup_kind=data.rise_kind
+    end
+    data.was_down=nil;data.rise_start=nil;data.rise_kind=nil
+  end
 end
 function O:update(frame,events)
   frame.contacts={} -- Resolved contacts for the input-only dummy policy.
@@ -45,17 +74,35 @@ function O:update(frame,events)
   local previous=self.previous
   for i,p in ipairs(frame.players) do
     local prev=previous and previous.players[i]
+    movement(self.movement[i],p,prev,frame.engine)
     -- Fresh native initializer, not a retained script ID, identifies entry.
     local entry
     for _,e in ipairs(events.entries or {}) do if e.actor==p.address then entry=e;break end end
+    local accepted
+    for _,e in ipairs(events.grabs or {}) do if e.source==p.address then accepted=e;break end end
+    local throw
+    for _,e in ipairs(events.throws or {}) do if e.source==p.address then throw=e;break end end
+    if entry and accepted and entry.script==accepted.script and (throw or self.current[i] and self.current[i].throw_checks) then
+      -- Successful grab initializer redirects the current attempt.
+      entry=nil
+    end
     if entry then
       if self.current[i] then self:finish(i,"superseded / cancel") end
       self.current[i]=new_attempt(frame,i,entry,previous)
     end
+    if throw and not self.current[i] then self.current[i]=new_attempt(frame,i,throw,previous) end
     local a=self.current[i];local d=frame.players[3-i];local old_d=previous and previous.players[3-i]
     if a then
       a.elapsed=frame.engine-a.start
       local tick_advances=advances(p,prev)
+      for _,e in ipairs(events.throws or {}) do
+        if e.source==p.address and e.target==d.address then
+          a.throw_kind=a.throw_kind or e.kind
+          a.throw_startup=a.throw_startup or a.source_ticks
+          a.throw_checks=(a.throw_checks or 0)+1
+          a.last_throw_tick=a.source_ticks
+        end
+      end
       local body=active(frame,p.address,false);local owned=active(frame,p.address,true)
       local projectile=false
       for _,box in ipairs(frame.boxes) do if box.kind=="attack" and box.owner==p.address and box.actor~=p.address then projectile=true;break end end
@@ -114,7 +161,7 @@ function O:update(frame,events)
           if e.actor==d.address then a.defender_acted=true;a.defender_admission=a.defender_admission or frame.engine end
         end
       end
-      local phase=a.interrupted and "interrupted" or p.hitpause~=0 and "freeze" or body and "active" or projectile and "projectile" or p.ready and "ready" or a.first_active and "recovery" or "startup"
+      local phase=a.interrupted and "interrupted" or throw and "throw" or p.hitpause~=0 and "freeze" or body and "active" or projectile and "projectile" or p.ready and "ready" or (a.first_active or a.throw_checks) and "recovery" or "startup"
       U.push(a.timeline,{phase=phase,contact=contact,engine=frame.engine},self.limit)
       if tick_advances then a.source_ticks=a.source_ticks+1 end
       if a.attacker_ready and not owned and (not a.contact or a.defender_ready) then

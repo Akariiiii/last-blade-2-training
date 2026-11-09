@@ -4,7 +4,8 @@ local words,bytes,dwords,hooks={},{},{},{};local checks=0
 local function equal(a,b,message)assert(a==b,(message or 'value')..': '..tostring(a)..' != '..tostring(b));checks=checks+1 end
 for _,c in ipairs({{0x293c,{0x08ad,0,0x501,0x426d,0x560,0x4eb9}},
  {0x1a03a,{0x3b7c,0xffff,0x3d58,0x422d,0x3d62,0x4e75}},
- {0x1b05c,{0x4a2d,0x7d82,0x6602,0x4e75,0x4a2c,0x100}}})do
+ {0x1b05c,{0x4a2d,0x7d82,0x6602,0x4e75,0x4a2c,0x100}},
+ {0x4116,{0x4a6d,0x02c6,0x6700,0x00de,0x0c2d,0x0002,0x053a}}})do
  for i,w in ipairs(c[2])do words[c[1]+(i-1)*2]=w end
 end
 local m={readword=function(a)return words[a]or 0 end,readbyte=function(a)return bytes[a]or 0 end,
@@ -37,7 +38,12 @@ dwords[0x10853e]=0
 flow:after(frame);flow:after(frame);equal(flow.active,true);flow:after(frame);equal(flow.active,false);equal(flow.finished,true)
 flow:install();hooks[0x1b05c]();equal(bytes[0x100b00],nil,'inactive menu cannot write timer')
 flow:request();hooks[0x1b05c]();equal(bytes[0x100b00],0x21);equal(bytes[0x100b01],60)
+equal(flow.stage_supported,true);flow:request(11)
+hooks[0x4116]();equal(words[0x10e57c],nil,'do not change a stage while returning')
+flow:transition('intro');hooks[0x4116]();equal(words[0x10e57c],9,'apply before native stage intro')
+words[0x10e57c]=3;hooks[0x4116]();equal(words[0x10e57c],3,'apply once')
 flow:stop();equal(hooks[0x1b05c],nil)
+equal(hooks[0x4116],nil)
 words[0x293c]=0;equal(flow:request(),false);equal(flow.active,false)
 -- Fast transitions own only returning/intro, never interactive selection/fight.
 local speed={};local flow2=Select.new({memory=m,emu={speedmode=function(mode)speed[#speed+1]=mode end}})

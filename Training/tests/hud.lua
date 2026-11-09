@@ -43,4 +43,14 @@ hud:attempt(1,p,m,6,46,false);eq(text('Startup: <=0f')~=nil,true,'zero bound pre
 reset();local c={tab=3,row=12,tabs=function()return {'Display','Dummy','Resources','Actions','Recording'} end,
  items=function()local r={};for n=1,15 do r[n]={'Option '..n,'On','k'} end;return r end}
 hud:menu(c,320);eq(text('> Option 12')~=nil,true);eq(text('  Option 1'),nil);eq(text('12/15')~=nil,true)
+-- A lightweight snapshot cannot establish the absence of hurtboxes on a paused roll.
+local fighter={address=1,state=0x17,sx=100,sy=170,name='Lee',mode=0}
+local roll={players={fighter,fighter},boxes={},hurtboxes_sampled=false}
+local timing={current={},last={},movement={{jump=4,wakeup=30,wakeup_kind='Roll'},{}},history={h,h}}
+local settings={show_boxes=true,show_stun=false,show_hud=true,show_inputs=true,show_movement=true,hud_detail=true,input_history_rows=12}
+reset();hud:draw(roll,timing,settings,nil,320,224)
+eq(text('No hurtbox seen'),nil,'skipped samples cannot establish absence')
+eq(text('12').args[2]>text('Jump 4f  Roll 30f').args[2]+8,true,'extra timing clears input rows')
+roll.hurtboxes_sampled=true;reset();hud:draw(roll,timing,settings,nil,320,224)
+eq(text('No hurtbox seen')~=nil,true,'show observed absence during roll')
 print('PASS HUD: '..tests..' assertions')

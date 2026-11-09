@@ -2,6 +2,8 @@ local U=require("lb2.util")
 local Game,Hooks,Observe,Controls,HUD=require("lb2.game"),require("lb2.hooks"),require("lb2.observe"),require("lb2.controls"),require("lb2.hud")
 local Select,Recorder,Resources=require('lb2.select'),require('lb2.recorder'),require('lb2.resources')
 local A={};A.__index=A
+local input_names={'Up','Down','Left','Right','Button A','Button B','Button C','Button D'}
+local prefixes={'P1 ','P2 '}
 function A.new(api,options)
   api=api or {memory=memory,emu=emu,gui=gui,joypad=joypad,input=input,savestate=savestate}
   local app=setmetatable({api=api,options=options or {},game=Game.new(api),hooks=nil,observe=Observe.new(),controls=Controls.new(api),hud=HUD.new(api.gui),
@@ -20,56 +22,55 @@ end
 function A:return_select()
   self:reset();self.controls.menu=false
   self.flow.fast_transitions=self.controls.fast_transitions
-  local ok,message=self.flow:request()
-  if ok and self.hooks then self.hooks:stop();self.observations_suspended=true;self.select_engine=nil
+  local ok,message=self.flow:request(self.controls.stage_choice)
+  if ok and self.hooks then self.hooks:set_enabled(false);self.select_engine=nil
   elseif not ok then self.message=message end
   return ok,message
 end
 function A:input_history(frame)
   local keys=self.controls.last_keys or self.api.joypad.get()
   for i=1,2 do
-    local prefix="P"..i.." ";local parts={}
-    for _,key in ipairs({"Up","Down","Left","Right"}) do if keys[prefix..key] then parts[#parts+1]=key:sub(1,1) end end
-    for _,key in ipairs({"A","B","C","D"}) do if keys[prefix.."Button "..key] then parts[#parts+1]=key end end
-    local direction,buttons={},{}
-    for _,key in ipairs({'Up','Down','Left','Right'})do direction[key:lower()]=not not keys[prefix..key]end
-    for _,key in ipairs({'A','B','C','D'})do buttons[key]=not not keys[prefix..'Button '..key]end
-    local bits={}
-    for _,key in ipairs({'Up','Down','Left','Right','Button A','Button B','Button C','Button D'})do bits[#bits+1]=keys[prefix..key]and '1'or '0'end
-    local text=table.concat(bits)
+    local prefix=prefixes[i];local mask=0
+    for _,key in ipairs(input_names) do mask=mask*2+(keys[prefix..key] and 1 or 0) end
     local h=self.observe.history[i];local last=h[#h]
-    if last and last.text==text then last.frames=last.frames+1 else U.push(h,{text=text,frames=1,direction=direction,buttons=buttons},12) end
+    if last and last.mask==mask then
+      last.frames=last.frames+1
+    else
+      U.push(h,{mask=mask,frames=1,
+        direction={up=keys[prefix..'Up'],down=keys[prefix..'Down'],left=keys[prefix..'Left'],right=keys[prefix..'Right']},
+        buttons={A=keys[prefix..'Button A'],B=keys[prefix..'Button B'],C=keys[prefix..'Button C'],D=keys[prefix..'Button D']}},12)
+    end
   end
 end
 function A:step()
   if self.stopped then return end
+  local engine=self.api.emu.framecount()
   if self.flow.active then
-    local engine=self.api.emu.framecount()
     if engine==self.select_engine then return end
     self.select_engine=engine
     -- Selection preview tasks reuse actor memory. Do not decode them as fighters.
-    local preview=self.flow.stage=='intro' and self.api.memory.readdword(0x100000)==0x42ee and self.game:sample(self:width()) or nil
+    local preview=self.flow.stage=='intro' and self.api.memory.readdword(0x100000)==0x42ee and self.game:sample(self:width(),true) or nil
     self.flow:after(preview)
     if self.flow.finished then
       self.flow.finished=false;self:reset()
-      self.hooks:install(function()return self:width()end);self.observations_suspended=false
+      self.hooks:set_enabled(true)
     end
     return
   end
   if self.flow.error then return end
-  if self.observations_suspended then
-    self.hooks:install(function()return self:width()end);self.observations_suspended=false
-  end
-  local frame=self.game:sample(self:width())
+  if self.engine==engine then return end -- Repaints reuse the previous snapshot.
+  local frame=self.game:sample(self:width(),false,self.controls.show_boxes and not self.controls.lightweight)
   if not frame then
     if self.frame then self:reset() end
     return
   end
-  if self.engine==frame.engine then return end -- Drawing while paused never advances measurements.
   if self.engine and frame.engine~=self.engine+1 then self:reset() end
   local events=self.hooks:take(frame.engine)
   frame.entries=events.entries
   for _,b in ipairs(events.boxes) do frame.boxes[#frame.boxes+1]=b end
+  for _,e in ipairs(events.throws) do
+    if e.box then frame.boxes[#frame.boxes+1]=e.box end
+  end
   frame.guard_policy=self.controls:label()
   self.observe:update(frame,events);self:input_history(frame)
   self.engine=frame.engine;self.frame=frame
@@ -100,13 +101,18 @@ function A:stop()
   -- No resource settings or ROM bytes were changed by observation.
 end
 function A:start()
+  if self.started or self.stopped then return end
   local api=self.api
   assert(api.memory and api.memory.registerexec and api.memory.getregister,"FBNeo Lua memory hooks required")
   assert(api.emu.registerbefore and api.gui.register,"FBNeo Lua callbacks required")
+  self.started=true
   self.compatible,self.message=self.game:compatible()
   if self.compatible then
-    self.hooks=Hooks.new(self.game,api);self.hooks:install(function() return self:width() end)
+    self.hooks=Hooks.new(self.game,api);self.hooks:install(function() return self:width() end,
+      function() return self.controls.show_boxes and not self.controls.lightweight end,
+      function() return self.controls.show_throw_boxes and not self.controls.lightweight end)
     self.flow:install();self.resources:install()
+    self.controls.stage_supported=self.flow.stage_supported
     api.emu.registerbefore(function()
       if self.stopped then return end
       if self.flow.active then self.api.joypad.set(self.flow:before(self.api.joypad.get()));return end
@@ -115,7 +121,10 @@ function A:start()
     -- Capture in GUI callback: same synchronized path as the accepted private recorder.
     api.gui.register(function() self:step();self:draw() end)
     self.controls:hotkeys(function() self:reset() end,function()self:return_select()end)
-    if api.savestate and api.savestate.registerload then api.savestate.registerload(function()self.flow:cancel();self.flow.error=nil;self:reset()end) end
+    if api.savestate and api.savestate.registerload then api.savestate.registerload(function()
+      if self.stopped then return end
+      self.flow:cancel();self.flow.error=nil;self:reset();self.hooks:set_enabled(true)
+    end) end
     if api.emu.registerexit then api.emu.registerexit(function() self:stop() end) end
     if self.options.startup_select~=false then self:return_select() end
   else api.gui.register(function() self:draw() end) end
